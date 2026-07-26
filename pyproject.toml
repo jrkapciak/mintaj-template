@@ -1,0 +1,82 @@
+[tool.poetry]
+name = "config"
+version = "0.1.0"
+description = ""
+authors = ["jk"]
+
+[tool.poetry.dependencies]
+python = "^3.14"
+django = ">=4.2, <5.0"
+psycopg2 = "^2.9.9"
+python-dotenv = "^1.0.0"
+gunicorn = "^22.0.0"
+whitenoise = "^6.6.0"
+django-ninja = "^1.6.2"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.10.1"
+isort = "^5.12.0"
+bandit = "^1.7.9"
+flake8 = "^6.1.0"
+pylint = "^3.0.2"
+django-debug-toolbar = "^4.2.0"
+pytest-django = "^4.7.0"
+pytest-dotenv = "^0.5.2"
+pytest-factoryboy = "^2.6.0"
+pre-commit = "^2.15.0"
+poetry-plugin-dotenv = "^0.6.28"
+pytest-mock = "^3.14.0"
+pytest-xdist = "^3.8.0"
+freezegun = "^1.5.5"
+factory-boy = "^3.3.0"
+
+[tool.black]
+line-length = 120
+target-version = ["py311"]
+--extend-exclude = '''
+/(
+  .env_local.py
+  /venv
+)/
+| migrations/
+'''
+
+[tool.isort]
+line_length = 120
+skip_glob = ["*/migrations/*"]
+profile = "black"
+
+[tool.pylint.DESIGN]
+max-args = 5
+good-names="i,j,k,v,ex,_,pk,x,y"
+
+[tool.pylint.FORMAT]
+max-line-length = 120
+ignore-paths=".*/migrations"
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = "missing-docstring, line-too-long, logging-fstring-interpolation, duplicate-code, fixme, too-many-arguments, cyclic-import"
+
+[tool.pylint.SIMILARITIES]
+ignore-comments = "yes"
+ignore-docstrings = "yes"
+ignore-imports = "yes"
+min-similarity-lines = 5
+disable = ["E1101", "R0903", "W0613", "W0223", "W0622", "W0621", "W0012"]
+
+[tool.bandit]
+exclude_dirs = ["venv", "tests", "migrations", "conftest", "factories"]
+skips = ["B101", "B601", "B311"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = "tests.py test_*.py *_tests.py"
+pythonpath = ["."]
+filterwarnings = ["ignore::DeprecationWarning", "ignore:DateTimeField .* received a naive datetime:RuntimeWarning"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
