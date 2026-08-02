@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 from .utils import get_env_variable
@@ -38,6 +39,9 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     # 3rd party
+    "ninja",
+    "ninja_jwt",
+    "ninja_jwt.token_blacklist",
     "whitenoise.runserver_nostatic",
     # custom
     "common",
@@ -115,6 +119,18 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+NINJA_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+}
+
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
@@ -140,3 +156,27 @@ WHITENOISE_MANIFEST_STRICT = False
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "users.User"
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        "api": {"handlers": ["console"], "level": "INFO"},
+    },
+}
+
+# Google Sign-In (verifies the ID token issued by Google Identity Services)
+GOOGLE_CLIENT_ID = get_env_variable("GOOGLE_CLIENT_ID")
+SECURE_REFERRER_POLICY = "no-referrer-when-downgrade"
+
+# Discord register/login (classic OAuth2 authorization code flow)
+DISCORD_CLIENT_ID = get_env_variable("DISCORD_CLIENT_ID")
+DISCORD_CLIENT_SECRET = get_env_variable("DISCORD_CLIENT_SECRET")
+DISCORD_REDIRECT_URI = get_env_variable("DISCORD_REDIRECT_URI")
+DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token"
+DISCORD_USER_URL = "https://discord.com/api/users/@me"
+# ponytail: Discord/Cloudflare returns 403 for urllib's default User-Agent ("Python-urllib/x.y")
+DISCORD_USER_AGENT = "mintaj (https://github.com, 1.0)"

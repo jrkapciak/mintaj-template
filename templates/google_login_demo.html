@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>Mintaj — Brama Krainy</title>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  :root {
+    --parchment: #e9d9b3;
+    --parchment-dark: #d8c495;
+    --wood: #3b2314;
+    --wood-dark: #241408;
+    --gold: #c9a04a;
+    --gold-bright: #f2d386;
+    --ember: #b8452c;
+    --ink: #2a1c10;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at center, #4a3120 0%, var(--wood-dark) 75%);
+    font-family: Georgia, "Palatino Linotype", serif;
+    color: var(--parchment);
+    padding: 24px;
+  }
+  .scroll {
+    width: 100%;
+    max-width: 420px;
+    background: linear-gradient(180deg, var(--parchment) 0%, var(--parchment-dark) 100%);
+    border: 6px double var(--gold);
+    border-radius: 10px;
+    box-shadow: 0 0 0 4px var(--wood-dark), 0 20px 60px rgba(0,0,0,0.6);
+    padding: 32px 28px;
+    color: var(--ink);
+  }
+  h1 {
+    text-align: center;
+    font-variant: small-caps;
+    letter-spacing: 2px;
+    color: var(--wood);
+    text-shadow: 1px 1px 0 var(--gold-bright);
+    margin-top: 0;
+  }
+  .subtitle {
+    text-align: center;
+    font-style: italic;
+    color: #5a4326;
+    margin-bottom: 24px;
+  }
+  .g_id_signin_wrap {
+    display: flex;
+    justify-content: center;
+    margin: 18px 0;
+    padding: 12px;
+    background: rgba(0,0,0,0.05);
+    border: 2px solid var(--gold);
+    border-radius: 8px;
+  }
+  .divider {
+    text-align: center;
+    color: #7a5f36;
+    margin: 20px 0;
+    font-style: italic;
+  }
+  .character-sheet {
+    margin-top: 20px;
+    border-top: 2px dashed var(--gold);
+    padding-top: 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    display: none;
+  }
+  .character-sheet.visible { display: block; }
+  .character-sheet .name {
+    font-size: 20px;
+    font-variant: small-caps;
+    color: var(--ember);
+    font-weight: bold;
+  }
+  .status {
+    text-align: center;
+    font-weight: bold;
+    margin: 10px 0;
+  }
+  .status.error { color: var(--ember); }
+  .status.ok { color: #2f6b2f; }
+  .token {
+    word-break: break-all;
+    font-family: monospace;
+    font-size: 11px;
+    background: rgba(0,0,0,0.06);
+    padding: 6px;
+    border-radius: 4px;
+    margin-top: 4px;
+  }
+  button.logout {
+    display: block;
+    margin: 16px auto 0;
+    background: var(--wood);
+    color: var(--gold-bright);
+    border: 2px solid var(--gold);
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-family: inherit;
+    font-variant: small-caps;
+    cursor: pointer;
+  }
+  button.logout:hover { background: var(--wood-dark); }
+  .discord-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 8px auto 0;
+    background: #5865F2;
+    color: #fff;
+    border: 2px solid #454fbf;
+    border-radius: 20px;
+    padding: 10px 20px;
+    font-family: inherit;
+    font-variant: small-caps;
+    font-weight: bold;
+    text-decoration: none;
+    max-width: 260px;
+  }
+  .discord-btn:hover { background: #454fbf; }
+</style>
+</head>
+<body>
+  <div class="scroll">
+    <h1>⚔ Kraina Mintaj ⚔</h1>
+    {% if mode == "login" %}
+      <p class="subtitle">Zaloguj się i wróć do krainy</p>
+    {% else %}
+      <p class="subtitle">Zarejestruj się i wkrocz do krainy</p>
+    {% endif %}
+
+    <div id="login-area">
+      <div class="g_id_signin_wrap">
+        <div id="g_id_signin_btn"></div>
+      </div>
+      {% if mode == "login" %}
+        <p class="divider">— logowanie przez konto Gmail —</p>
+      {% else %}
+        <p class="divider">— rejestracja przez konto Gmail —</p>
+      {% endif %}
+
+      <a class="discord-btn" href="{{ discord_authorize_url }}">
+        {% if mode == "login" %}Zaloguj się przez Discord{% else %}Zarejestruj się przez Discord{% endif %}
+      </a>
+      <p class="divider">— albo przez Discord —</p>
+    </div>
+
+    <p id="status" class="status"></p>
+
+    <div id="sheet" class="character-sheet">
+      <div class="name" id="sheet-name"></div>
+      <div>Access token:</div>
+      <div class="token" id="sheet-access"></div>
+      <div>Refresh token:</div>
+      <div class="token" id="sheet-refresh"></div>
+      <div>Odpowiedź strażnika bramy (<code>/api/users/me</code>):</div>
+      <div class="token" id="sheet-me"></div>
+      <button class="logout" onclick="logout()">Opuść krainę</button>
+    </div>
+  </div>
+
+<script>
+const log = (...args) => console.log("%c[mintaj-auth]", "color:#c9a04a;font-weight:bold", ...args);
+const warn = (...args) => console.warn("%c[mintaj-auth-WARN]", "color:#e6a23c;font-weight:bold", ...args);
+const error = (...args) => console.error("%c[mintaj-auth-ERROR]", "color:#b8452c;font-weight:bold", ...args);
+
+// 1. Przechwytywanie globalnych błędów JS i obietnic (Promises)
+window.addEventListener("error", (e) => error("Błąd na stronie:", e.error || e.message));
+window.addEventListener("unhandledrejection", (e) => error("Odrzucona obietnica:", e.reason));
+
+log("Strona załadowana. Czekam na skrypt Google...");
+
+// Powrót z przekierowania Discorda (/api/users/discord-callback dokleja tokeny do URL-a).
+(function handleDiscordRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const access = params.get("access");
+  const refresh = params.get("refresh");
+  if (!access || !refresh) return;
+
+  log("Wykryto powrót z Discorda, tokeny w URL.");
+  history.replaceState(null, "", window.location.pathname);
+  sessionStorage.setItem("mintaj_access", access);
+  sessionStorage.setItem("mintaj_refresh", refresh);
+  showCharacterSheet({access, refresh});
+})();
+
+const gsiScript = document.querySelector('script[src*="gsi/client"]');
+gsiScript?.addEventListener("error", () => error("Nie udało się załadować skryptu Google — sprawdź AdBlock/VPN."));
+
+window.addEventListener("load", () => {
+  // 2. DIAGNOSTYKA ŚRODOWISKA (Sprawdź konsolę F12!)
+  const currentOrigin = window.location.origin;
+  const configuredClientId = "{{ google_client_id }}";
+
+  console.group("%c[mintaj-auth] 🔍 AUDYT KONFIGURACJI GSI", "color:#f2d386; background:#3b2314; padding:4px;");
+  log("1. Twój obecny origin (DOKŁADNIE TEN ADRES musisz mieć w Google Cloud Console):", currentOrigin);
+  log("2. Wczytany Client ID:", configuredClientId);
+
+  // Szybka weryfikacja poprawności formatu Client ID
+  if (!configuredClientId.endsWith(".apps.googleusercontent.com")) {
+    warn("UWAGA: Twoje 'google_client_id' nie wygląda jak poprawny ID od Google! (Powinno kończyć się na .apps.googleusercontent.com)");
+  }
+
+  if (currentOrigin.includes("localhost") && !currentOrigin.includes("http://localhost:")) {
+    warn("Wskazówka: Jeśli używasz niestandardowego portu (np. 8000), upewnij się, że w konsoli Google wpisałeś http://localhost:8000 a nie samo http://localhost");
+  }
+  console.groupEnd();
+
+  // 3. Sprawdzanie dostępności SDK Google
+  if (typeof google === "undefined" || !google.accounts?.id) {
+    error("Biblioteka google.accounts.id jest niedostępna.");
+    const statusEl = document.getElementById("status");
+    statusEl.textContent = "⚠ Nie udało się załadować logowania Google. Sprawdź adblock/rozszerzenia.";
+    statusEl.className = "status error";
+    return;
+  }
+
+  log("Inicjalizuję google.accounts.id...");
+
+  try {
+    google.accounts.id.initialize({
+      client_id: configuredClientId,
+      callback: handleCredentialResponse,
+      // 4. NOWOŚĆ: Rejestracja błędów wewnątrz biblioteki Google GSI
+      error_callback: (err) => {
+        error("BŁĄD WEWNĘTRZNY GSI (Google Error Callback):", err);
+        const statusEl = document.getElementById("status");
+        statusEl.textContent = `⚠ Błąd Google: ${err.type || 'Nieznany błąd GSI'}`;
+        statusEl.className = "status error";
+      }
+    });
+
+    // Renderowanie przycisku Google
+    google.accounts.id.renderButton(document.getElementById("g_id_signin_btn"), {
+      type: "standard",
+      theme: "filled_black",
+      text: "{% if mode == 'login' %}signin_with{% else %}signup_with{% endif %}",
+      shape: "pill",
+    });
+    log("Przycisk Google wyrenderowany pomyślnie.");
+  } catch (e) {
+    error("Wyjątek podczas inicjalizacji Google GSI:", e);
+  }
+});
+
+async function handleCredentialResponse(response) {
+  log("Callback Google wywołany! Otrzymano token JWT (credential):", !!response.credential);
+
+  // Debugowanie zawartości tokena ID bez wysyłania do backendu
+  if (response.credential) {
+    try {
+      const base64Url = response.credential.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+      log("Rozkodowany payload z Google ID Token:", JSON.parse(jsonPayload));
+    } catch (e) {
+      warn("Nie udało się rozkodować payloadu ID Tokena lokalnie:", e);
+    }
+  }
+
+  const statusEl = document.getElementById("status");
+  statusEl.textContent = "Strażnik sprawdza pieczęć Google...";
+  statusEl.className = "status";
+
+  try {
+    log("Wysyłam id_token do /api/users/google-login...");
+    const res = await fetch("/api/users/google-login", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({id_token: response.credential}),
+    });
+
+    log("Odpowiedź HTTP z backendu:", res.status, res.statusText);
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      error("Backend odrzucił token:", res.status, err);
+      throw new Error(err.detail || `Brama odmawia wstępu (${res.status})`);
+    }
+
+    const tokens = await res.json();
+    log("Otrzymano tokeny z własnego backendu:", tokens);
+    sessionStorage.setItem("mintaj_access", tokens.access);
+    sessionStorage.setItem("mintaj_refresh", tokens.refresh);
+
+    statusEl.textContent = "Wstęp dozwolony!";
+    statusEl.className = "status ok";
+    await showCharacterSheet(tokens);
+  } catch (e) {
+    error("Logowanie nieudane:", e);
+    statusEl.textContent = "⚠ " + e.message;
+    statusEl.className = "status error";
+  }
+}
+
+async function showCharacterSheet(tokens) {
+  document.getElementById("login-area").style.display = "none";
+  document.getElementById("sheet-access").textContent = tokens.access;
+  document.getElementById("sheet-refresh").textContent = tokens.refresh;
+
+  log("Sprawdzam token na /api/users/me...");
+  try {
+    const meRes = await fetch("/api/users/me", {
+      headers: {"Authorization": "Bearer " + tokens.access},
+    });
+    log("/api/users/me odpowiedziało stasusem:", meRes.status);
+    const meData = meRes.ok ? await meRes.json() : `Błąd HTTP ${meRes.status}`;
+    document.getElementById("sheet-me").textContent = typeof meData === "object" ? JSON.stringify(meData, null, 2) : meData;
+  } catch (e) {
+    error("Błąd podczas pobierania /api/users/me:", e);
+    document.getElementById("sheet-me").textContent = "Błąd połączenia z /api/users/me";
+  }
+
+  document.getElementById("sheet-name").textContent = "Podróżnik przybył do krainy";
+  document.getElementById("sheet").classList.add("visible");
+}
+
+function logout() {
+  log("Wylogowanie...");
+  sessionStorage.removeItem("mintaj_access");
+  sessionStorage.removeItem("mintaj_refresh");
+  location.reload();
+}
+</script>
+</body>
+</html>

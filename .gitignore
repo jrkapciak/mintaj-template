@@ -79,4 +79,5 @@ celerybeat.pid
 
 # Locally uploaded media files
 /media/
-
+.claude
+CLAUDE.md

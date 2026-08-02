@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>Mintaj — Brama Krainy</title>
+<style>
+  :root {
+    --parchment: #e9d9b3;
+    --parchment-dark: #d8c495;
+    --wood: #3b2314;
+    --wood-dark: #241408;
+    --gold: #c9a04a;
+    --gold-bright: #f2d386;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at center, #4a3120 0%, var(--wood-dark) 75%);
+    font-family: Georgia, "Palatino Linotype", serif;
+    color: var(--parchment);
+    padding: 24px;
+  }
+  .scroll {
+    width: 100%;
+    max-width: 380px;
+    background: linear-gradient(180deg, var(--parchment) 0%, var(--parchment-dark) 100%);
+    border: 6px double var(--gold);
+    border-radius: 10px;
+    box-shadow: 0 0 0 4px var(--wood-dark), 0 20px 60px rgba(0,0,0,0.6);
+    padding: 32px 28px;
+    color: #2a1c10;
+    text-align: center;
+  }
+  h1 {
+    font-variant: small-caps;
+    letter-spacing: 2px;
+    color: var(--wood);
+    text-shadow: 1px 1px 0 var(--gold-bright);
+    margin-top: 0;
+  }
+  .subtitle {
+    font-style: italic;
+    color: #5a4326;
+    margin-bottom: 28px;
+  }
+  a.choice {
+    display: block;
+    margin: 12px 0;
+    background: var(--wood);
+    color: var(--gold-bright);
+    border: 2px solid var(--gold);
+    border-radius: 8px;
+    padding: 14px;
+    font-family: inherit;
+    font-variant: small-caps;
+    font-size: 18px;
+    text-decoration: none;
+  }
+  a.choice:hover { background: var(--wood-dark); }
+</style>
+</head>
+<body>
+  <div class="scroll">
+    <h1>⚔ Kraina Mintaj ⚔</h1>
+    <p class="subtitle">Czy jesteś tu po raz pierwszy?</p>
+    <a class="choice" href="/demo/register/">Zarejestruj się</a>
+    <a class="choice" href="/demo/login/">Zaloguj się</a>
+  </div>
+</body>
+</html>
