@@ -10,6 +10,7 @@ from django.http import HttpRequest, HttpResponseRedirect
 from ninja import Router, Schema
 from ninja.errors import HttpError
 from ninja_jwt.tokens import RefreshToken
+from urllib.parse import urlencode
 
 from api.auth import JWTAuth
 from users.services import UserService
@@ -17,13 +18,6 @@ from users.services import UserService
 logger = logging.getLogger(__name__)
 
 router = Router(tags=["Users & Authentication"])
-
-_google_jwks_client = jwt.PyJWKClient("https://www.googleapis.com/oauth2/v3/certs")
-
-
-class GoogleLoginIn(Schema):
-    id_token: str
-
 
 class TokenOut(Schema):
     access: str
@@ -38,33 +32,79 @@ def _issue_tokens(provider: str, provider_user_id: str, email: str) -> dict[str,
     return {"access": str(refresh.access_token), "refresh": str(refresh)}
 
 
-@router.post(
-    "/google-login",
-    response=TokenOut,
-    summary="Register/login via Google account",
+@router.get("/google/login", auth=None)
+def google_auth(request: HttpRequest):
+
+    params = {
+        "client_id": settings.GOOGLE_CLIENT_ID,
+        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "select_account",
+    }
+
+    return HttpResponseRedirect(
+        "https://accounts.google.com/o/oauth2/v2/auth?"
+        + urlencode(params)
+    )
+
+@router.get(
+    "/google-callback",
+    auth=None,
+    summary="Google OAuth callback",
 )
-def google_login(request: HttpRequest, payload: GoogleLoginIn) -> dict[str, str]:
-    logger.info("google_login: received id_token (%d chars)", len(payload.id_token))
+def google_oauth_callback(
+    request: HttpRequest,
+    code: str,
+):
+    token_data = urllib.parse.urlencode(
+        {
+            "client_id": settings.GOOGLE_CLIENT_ID,
+            "client_secret": settings.GOOGLE_CLIENT_SECRET,
+            "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+            "grant_type": "authorization_code",
+            "code": code,
+        }
+    ).encode()
+
+    token_request = urllib.request.Request(
+        "https://oauth2.googleapis.com/token",
+        data=token_data,
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+    )
 
     try:
-        signing_key = _google_jwks_client.get_signing_key_from_jwt(payload.id_token)
-        claims = jwt.decode(
-            payload.id_token,
-            signing_key.key,
-            algorithms=["RS256"],
-            audience=settings.GOOGLE_CLIENT_ID,
-            issuer=["https://accounts.google.com", "accounts.google.com"],
-        )
-    except jwt.PyJWTError as e:
-        logger.warning("google_login: token rejected — %s", e)
-        raise HttpError(401, f"Invalid Google token: {e}")
+        with urllib.request.urlopen(token_request) as response:
+            token_response = json.loads(response.read())
+    except urllib.error.HTTPError as e:
+        raise HttpError(400, e.read().decode())
 
-    if not claims.get("email_verified"):
-        logger.warning("google_login: unverified email for %s", claims.get("email"))
-        raise HttpError(401, "Google account email is not verified.")
+    access_token = token_response["access_token"]
 
-    return _issue_tokens("google", claims["sub"], claims["email"])
+    user_request = urllib.request.Request(
+        "https://openidconnect.googleapis.com/v1/userinfo",
+        headers={
+            "Authorization": f"Bearer {access_token}",
+        },
+    )
 
+    with urllib.request.urlopen(user_request) as response:
+        profile = json.loads(response.read())
+
+    if not profile.get("email_verified"):
+        raise HttpError(401, "Email not verified")
+
+    tokens = _issue_tokens(
+        "google",
+        profile["sub"],
+        profile["email"],
+    )
+
+    redirect_url = "/demo/register/?" + urllib.parse.urlencode(tokens)
+    return HttpResponseRedirect(redirect_url)
 
 @router.get(
     "/discord-callback",

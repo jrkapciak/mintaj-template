@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <title>Mintaj — Brama Krainy</title>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root {
     --parchment: #e9d9b3;
@@ -128,6 +127,50 @@
     max-width: 260px;
   }
   .discord-btn:hover { background: #454fbf; }
+
+  .google-login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 260px;
+  margin: 0 auto;
+
+  padding: 10px 20px;
+
+  background: #fff;
+  color: #3c4043;
+
+  border: 1px solid #dadce0;
+  border-radius: 999px;
+
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+
+  text-decoration: none;
+  cursor: pointer;
+
+  transition: background .2s ease, box-shadow .2s ease;
+}
+
+.google-login-btn:hover {
+  background: #f8f9fa;
+  box-shadow: 0 1px 3px rgba(60,64,67,.3);
+}
+
+.google-login-btn:active {
+  background: #f1f3f4;
+}
+
+.google-login-btn::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  background: url("https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg")
+    center/contain no-repeat;
+  flex-shrink: 0;
+}
 </style>
 </head>
 <body>
@@ -141,7 +184,9 @@
 
     <div id="login-area">
       <div class="g_id_signin_wrap">
-        <div id="g_id_signin_btn"></div>
+          <a href="/api/users/google/login" class="google-login-btn">
+              Zaloguj przez Google
+          </a>
       </div>
       {% if mode == "login" %}
         <p class="divider">— logowanie przez konto Gmail —</p>
@@ -180,8 +225,7 @@ window.addEventListener("unhandledrejection", (e) => error("Odrzucona obietnica:
 
 log("Strona załadowana. Czekam na skrypt Google...");
 
-// Powrót z przekierowania Discorda (/api/users/discord-callback dokleja tokeny do URL-a).
-(function handleDiscordRedirect() {
+(function handleOAuthRedirect() {
   const params = new URLSearchParams(window.location.search);
   const access = params.get("access");
   const refresh = params.get("refresh");
@@ -193,115 +237,6 @@ log("Strona załadowana. Czekam na skrypt Google...");
   sessionStorage.setItem("mintaj_refresh", refresh);
   showCharacterSheet({access, refresh});
 })();
-
-const gsiScript = document.querySelector('script[src*="gsi/client"]');
-gsiScript?.addEventListener("error", () => error("Nie udało się załadować skryptu Google — sprawdź AdBlock/VPN."));
-
-window.addEventListener("load", () => {
-  // 2. DIAGNOSTYKA ŚRODOWISKA (Sprawdź konsolę F12!)
-  const currentOrigin = window.location.origin;
-  const configuredClientId = "{{ google_client_id }}";
-
-  console.group("%c[mintaj-auth] 🔍 AUDYT KONFIGURACJI GSI", "color:#f2d386; background:#3b2314; padding:4px;");
-  log("1. Twój obecny origin (DOKŁADNIE TEN ADRES musisz mieć w Google Cloud Console):", currentOrigin);
-  log("2. Wczytany Client ID:", configuredClientId);
-
-  // Szybka weryfikacja poprawności formatu Client ID
-  if (!configuredClientId.endsWith(".apps.googleusercontent.com")) {
-    warn("UWAGA: Twoje 'google_client_id' nie wygląda jak poprawny ID od Google! (Powinno kończyć się na .apps.googleusercontent.com)");
-  }
-
-  if (currentOrigin.includes("localhost") && !currentOrigin.includes("http://localhost:")) {
-    warn("Wskazówka: Jeśli używasz niestandardowego portu (np. 8000), upewnij się, że w konsoli Google wpisałeś http://localhost:8000 a nie samo http://localhost");
-  }
-  console.groupEnd();
-
-  // 3. Sprawdzanie dostępności SDK Google
-  if (typeof google === "undefined" || !google.accounts?.id) {
-    error("Biblioteka google.accounts.id jest niedostępna.");
-    const statusEl = document.getElementById("status");
-    statusEl.textContent = "⚠ Nie udało się załadować logowania Google. Sprawdź adblock/rozszerzenia.";
-    statusEl.className = "status error";
-    return;
-  }
-
-  log("Inicjalizuję google.accounts.id...");
-
-  try {
-    google.accounts.id.initialize({
-      client_id: configuredClientId,
-      callback: handleCredentialResponse,
-      // 4. NOWOŚĆ: Rejestracja błędów wewnątrz biblioteki Google GSI
-      error_callback: (err) => {
-        error("BŁĄD WEWNĘTRZNY GSI (Google Error Callback):", err);
-        const statusEl = document.getElementById("status");
-        statusEl.textContent = `⚠ Błąd Google: ${err.type || 'Nieznany błąd GSI'}`;
-        statusEl.className = "status error";
-      }
-    });
-
-    // Renderowanie przycisku Google
-    google.accounts.id.renderButton(document.getElementById("g_id_signin_btn"), {
-      type: "standard",
-      theme: "filled_black",
-      text: "{% if mode == 'login' %}signin_with{% else %}signup_with{% endif %}",
-      shape: "pill",
-    });
-    log("Przycisk Google wyrenderowany pomyślnie.");
-  } catch (e) {
-    error("Wyjątek podczas inicjalizacji Google GSI:", e);
-  }
-});
-
-async function handleCredentialResponse(response) {
-  log("Callback Google wywołany! Otrzymano token JWT (credential):", !!response.credential);
-
-  // Debugowanie zawartości tokena ID bez wysyłania do backendu
-  if (response.credential) {
-    try {
-      const base64Url = response.credential.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-      log("Rozkodowany payload z Google ID Token:", JSON.parse(jsonPayload));
-    } catch (e) {
-      warn("Nie udało się rozkodować payloadu ID Tokena lokalnie:", e);
-    }
-  }
-
-  const statusEl = document.getElementById("status");
-  statusEl.textContent = "Strażnik sprawdza pieczęć Google...";
-  statusEl.className = "status";
-
-  try {
-    log("Wysyłam id_token do /api/users/google-login...");
-    const res = await fetch("/api/users/google-login", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({id_token: response.credential}),
-    });
-
-    log("Odpowiedź HTTP z backendu:", res.status, res.statusText);
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      error("Backend odrzucił token:", res.status, err);
-      throw new Error(err.detail || `Brama odmawia wstępu (${res.status})`);
-    }
-
-    const tokens = await res.json();
-    log("Otrzymano tokeny z własnego backendu:", tokens);
-    sessionStorage.setItem("mintaj_access", tokens.access);
-    sessionStorage.setItem("mintaj_refresh", tokens.refresh);
-
-    statusEl.textContent = "Wstęp dozwolony!";
-    statusEl.className = "status ok";
-    await showCharacterSheet(tokens);
-  } catch (e) {
-    error("Logowanie nieudane:", e);
-    statusEl.textContent = "⚠ " + e.message;
-    statusEl.className = "status error";
-  }
-}
 
 async function showCharacterSheet(tokens) {
   document.getElementById("login-area").style.display = "none";

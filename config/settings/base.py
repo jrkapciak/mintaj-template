@@ -170,6 +170,8 @@ LOGGING = {
 
 # Google Sign-In (verifies the ID token issued by Google Identity Services)
 GOOGLE_CLIENT_ID = get_env_variable("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = get_env_variable("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = get_env_variable("GOOGLE_REDIRECT_URI")
 SECURE_REFERRER_POLICY = "no-referrer-when-downgrade"
 
 # Discord register/login (classic OAuth2 authorization code flow)
