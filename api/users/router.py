@@ -54,10 +54,7 @@ def google_auth(request: HttpRequest):
     auth=None,
     summary="Google OAuth callback",
 )
-def google_oauth_callback(
-    request: HttpRequest,
-    code: str,
-):
+def google_oauth_callback(request: HttpRequest, code: str) -> HttpResponseRedirect:
     token_data = urllib.parse.urlencode(
         {
             "client_id": settings.GOOGLE_CLIENT_ID,
