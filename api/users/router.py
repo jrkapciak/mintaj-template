@@ -3,25 +3,42 @@ import logging
 import urllib.error
 import urllib.parse
 import urllib.request
-
-import jwt
-from django.conf import settings
-from django.http import HttpRequest, HttpResponseRedirect
-from ninja import Router, Schema
-from ninja.errors import HttpError
-from ninja_jwt.tokens import RefreshToken
 from urllib.parse import urlencode
 
+from django.conf import settings
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import validate_email
+from django.http import HttpRequest, HttpResponseRedirect
+from ninja import Router
+from ninja.errors import HttpError
+from ninja_jwt.tokens import RefreshToken
+
 from api.auth import JWTAuth
+from api.users.schemas import RegisterIn, TokenOut
+from users.exceptions import EmailAlreadyTakenError
 from users.services import UserService
 
 logger = logging.getLogger(__name__)
 
 router = Router(tags=["Users & Authentication"])
 
-class TokenOut(Schema):
-    access: str
-    refresh: str
+
+@router.post("/register", auth=None, response={201: TokenOut}, summary="Register with email + password")
+def register(request: HttpRequest, data: RegisterIn) -> tuple[int, dict[str, str]]:
+    try:
+        validate_email(data.email)
+        validate_password(data.password)
+    except DjangoValidationError as e:
+        raise HttpError(400, "; ".join(e.messages))
+
+    try:
+        user = UserService.register_user(data.email, data.password)
+    except EmailAlreadyTakenError:
+        raise HttpError(409, "A user with this email already exists.")
+
+    refresh = RefreshToken.for_user(user)
+    return 201, {"access": str(refresh.access_token), "refresh": str(refresh)}
 
 
 def _issue_tokens(provider: str, provider_user_id: str, email: str) -> dict[str, str]:
@@ -34,7 +51,6 @@ def _issue_tokens(provider: str, provider_user_id: str, email: str) -> dict[str,
 
 @router.get("/google/login", auth=None)
 def google_auth(request: HttpRequest):
-
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
         "redirect_uri": settings.GOOGLE_REDIRECT_URI,
@@ -44,10 +60,8 @@ def google_auth(request: HttpRequest):
         "prompt": "select_account",
     }
 
-    return HttpResponseRedirect(
-        "https://accounts.google.com/o/oauth2/v2/auth?"
-        + urlencode(params)
-    )
+    return HttpResponseRedirect("https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params))
+
 
 @router.get(
     "/google-callback",
@@ -103,6 +117,7 @@ def google_oauth_callback(request: HttpRequest, code: str) -> HttpResponseRedire
     redirect_url = "/demo/register/?" + urllib.parse.urlencode(tokens)
     return HttpResponseRedirect(redirect_url)
 
+
 @router.get(
     "/discord-callback",
     summary="Discord OAuth2 callback — exchanges code for tokens, registers/logs in and redirects back",
@@ -150,11 +165,6 @@ def discord_callback(request: HttpRequest, code: str) -> HttpResponseRedirect:
     return HttpResponseRedirect(redirect_url)
 
 
-@router.get(
-    "/me",
-    response=str,
-    auth=JWTAuth(),
-    summary="Returns a simple text status message"
-)
+@router.get("/me", response=str, auth=JWTAuth(), summary="Returns a simple text status message")
 def get_status_text(request):
     return "Server is running fine and the client is connected."

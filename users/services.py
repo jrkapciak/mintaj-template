@@ -1,12 +1,20 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 
+from users.exceptions import EmailAlreadyTakenError
 from users.models import SocialAccount, User
 
 UserModel: type[User] = get_user_model()
 
 
 class UserService:
+    @staticmethod
+    def register_user(email: str, password: str) -> User:
+        """Creates a user with an email+password login. Username == email (USERNAME_FIELD is `username`)."""
+        if UserModel.objects.filter(username=email).exists():
+            raise EmailAlreadyTakenError(email)
+        return UserModel.objects.create_user(username=email, email=email, password=password)
+
     @staticmethod
     def login_social_user(provider: str, provider_user_id: str) -> User | None:
         """Returns the existing user linked to this social account, or None if there is no link."""
